@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ela's Task Tracker</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ──────────────────────────────────── -->
+  <header class="header">
+    <div>
+      <h1 id="child-name">Loading…</h1>
+      <div class="subtitle" id="role-label">Viewer mode</div>
+    </div>
+    <div class="header-right">
+      <div class="balance-box">
+        <span class="balance-amount" id="balance">—</span>
+        <span class="balance-label">savings</span>
+      </div>
+      <button class="btn-icon" id="lock-btn" onclick="toggleAuth()" title="Switch role">🔒</button>
+      <button class="btn-icon parent-only" onclick="openSettings()" title="Settings" style="display:none">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ── Goal progress ───────────────────────────── -->
+  <div class="card goal-card">
+    <div class="goal-header">
+      <span id="goal-name">🎯 Goal</span>
+      <span id="goal-text">— / — DKK</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="goal-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- ── Mandatory tasks (replaces old screen-time + daily + weekly cards) -->
+  <div class="card" id="mandatory-card">
+    <div class="card-title">📋 Mandatory Tasks</div>
+    <div id="mandatory-tasks">Loading…</div>
+    <div id="screen-time-summary" style="margin-top:12px"></div>
+  </div>
+
+  <!-- ── Strikes ────────────────────────────────── -->
+  <div class="card" id="strikes-card">
+    <div class="card-title">⚡ Strikes</div>
+    <div id="strikes-content">Loading…</div>
+  </div>
+
+  <!-- ── Optional tasks ──────────────────────────── -->
+  <div class="card">
+    <div class="card-title">⭐ Optional Tasks</div>
+    <div id="optional-tasks">Loading…</div>
+  </div>
+
+  <!-- ── Record spending / set balance (parent only) -->
+  <div class="card parent-only" style="display:none">
+    <div class="card-title">💸 Record Spending</div>
+    <div class="spend-row">
+      <input type="number" id="spend-amount" placeholder="Amount (DKK)" min="0" step="0.5">
+      <input type="text"   id="spend-desc"   placeholder="What was it for?">
+      <button class="btn btn-danger" onclick="recordSpending()">Deduct</button>
+    </div>
+    <div id="weekly-buy-warning" style="display:none" class="weekly-warning">
+      🚫 Ela already bought something this week!
+    </div>
+    <div class="set-balance-row">
+      <span class="set-balance-label">Set balance to:</span>
+      <input type="number" id="set-balance-amount" placeholder="e.g. 600" min="0" step="1"
+             onkeydown="if(event.key==='Enter') setBalance()">
+      <span class="set-balance-label">DKK</span>
+      <button class="btn btn-secondary" onclick="setBalance()">Set</button>
+    </div>
+  </div>
+
+  <!-- ── Transaction history ─────────────────────── -->
+  <div class="card">
+    <div class="card-title">📊 Recent History</div>
+    <div id="tx-list">Loading…</div>
+  </div>
+
+</div><!-- /#app -->
+
+
+<!-- ── Auth modal ────────────────────────────────── -->
+<div class="overlay" id="auth-modal" style="display:none">
+  <div class="modal modal-sm">
+    <h2 id="auth-title">🔐 Parent Login</h2>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="Enter parent password"
+             onkeydown="if(event.key==='Enter') submitAuth()">
+    </div>
+    <div id="auth-error" class="auth-error" style="display:none">Wrong password</div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAuth()">Cancel</button>
+      <button class="btn btn-primary"   onclick="submitAuth()">Login</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Settings modal (parent only) ─────────────── -->
+<div class="overlay" id="settings-modal" style="display:none">
+  <div class="modal">
+    <h2>⚙️ Settings</h2>
+
+    <div class="field">
+      <label>Child's Name</label>
+      <input type="text" id="s-child-name">
+    </div>
+    <div class="field">
+      <label>Goal Name</label>
+      <input type="text" id="s-goal-name">
+    </div>
+    <div class="field">
+      <label>Goal Amount (DKK)</label>
+      <input type="number" id="s-goal-amt" step="1" min="0">
+    </div>
+    <div class="field">
+      <label>Screen-time penalty per missed task (minutes)</label>
+      <input type="number" id="s-penalty" step="5" min="5">
+    </div>
+
+    <div class="field">
+      <label>Tracker URL (included in WhatsApp messages)</label>
+      <input type="text" id="s-site-url" placeholder="e.g. http://204.168.138.132">
+    </div>
+
+    <h3>WhatsApp Notifications</h3>
+    <div class="whatsapp-setup">
+      <div class="wa-steps">
+        <div class="wa-step">Each person needs their own API key:</div>
+        <div class="wa-step">1. Add <strong>+34 644 73 87 87</strong> to WhatsApp contacts as "CallMeBot"</div>
+        <div class="wa-step">2. Send: <code>I allow callmebot to send me messages</code></div>
+        <div class="wa-step">3. You'll receive your personal API key</div>
+      </div>
+      <div id="wa-contacts-list"></div>
+      <div class="wa-add-row">
+        <input type="text"   id="wa-new-label"  placeholder="Name (e.g. Mum)">
+        <input type="text"   id="wa-new-phone"  placeholder="+4512345678">
+        <input type="text"   id="wa-new-apikey" placeholder="API key">
+        <button class="btn btn-primary btn-sm" onclick="addContact()">Add</button>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="testWhatsApp()" style="margin-top:8px">
+        📲 Send test to all
+      </button>
+    </div>
+
+    <h3>Strikes</h3>
+    <div class="field">
+      <label>Max strikes before punishment</label>
+      <input type="number" id="s-strike-max" min="1" max="10" step="1">
+    </div>
+    <div class="field">
+      <label>Punishment</label>
+      <input type="text" id="s-strike-punishment" placeholder="e.g. Sleepover cancelled">
+    </div>
+
+    <h3>Mandatory Tasks &amp; Deadlines</h3>
+    <div id="tasks-list"></div>
+
+    <h3>Add Task</h3>
+    <div class="add-task-box">
+      <input type="text"   id="new-name"   placeholder="Task name" class="full">
+      <select id="new-type">
+        <option value="mandatory">Mandatory</option>
+        <option value="optional">Optional</option>
+      </select>
+      <select id="new-freq">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="manual">Manual (optional)</option>
+      </select>
+      <input type="number" id="new-reward"   placeholder="Reward DKK"  value="10" step="0.5" min="0">
+      <input type="number" id="new-dl-hour"  placeholder="Deadline hr"  value="20" min="0" max="23">
+      <select id="new-dl-day">
+        <option value="0">Mon</option><option value="1">Tue</option>
+        <option value="2">Wed</option><option value="3">Thu</option>
+        <option value="4" selected>Fri</option><option value="5">Sat</option>
+        <option value="6">Sun</option>
+      </select>
+      <button class="btn btn-primary full" onclick="addTask()">Add Task</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeSettings()">Close</button>
+      <button class="btn btn-primary"   onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
