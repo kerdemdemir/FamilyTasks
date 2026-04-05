@@ -364,6 +364,23 @@ async function setBalance() {
   loadDashboard();
 }
 
+async function addFunds() {
+  const amount = parseFloat(document.getElementById('spend-amount').value);
+  const desc   = document.getElementById('spend-desc').value.trim();
+  if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+  if (!desc)                  { toast('Enter a description', 'error'); return; }
+  const res = await fetch('/api/transactions', {
+    method: 'POST', headers: authHeaders(),
+    body: JSON.stringify({ amount: amount, description: `Added: ${desc}` }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.detail || 'Error', 'error'); return; }
+  toast(`+${amount} DKK added`, 'success');
+  document.getElementById('spend-amount').value = '';
+  document.getElementById('spend-desc').value   = '';
+  loadDashboard();
+}
+
 async function recordSpending() {
   const amount = parseFloat(document.getElementById('spend-amount').value);
   const desc   = document.getElementById('spend-desc').value.trim();
@@ -483,49 +500,57 @@ async function testWhatsApp() {
   else toast(`Failed for: ${failed.map(r=>r.label).join(', ')}`, 'error');
 }
 
+function renderTaskRow(t) {
+  const isMandatory = t.type === 'mandatory';
+  const deadlineInfo = isMandatory
+    ? (t.frequency === 'weekly'
+        ? `Deadline: ${DAYS[t.deadline_weekday||4]} at ${t.deadline_hour||20}:00`
+        : `Deadline: daily by ${t.deadline_hour||20}:00`)
+    : '';
+
+  return `
+    <div class="settings-task" id="stask-${t.id}">
+      <div class="st-info">
+        <div class="st-name">${t.name}</div>
+        <div class="st-meta">${t.frequency} · ${t.reward_dkk} DKK
+          ${deadlineInfo ? ` · <span class="deadline-chip">${deadlineInfo}</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${isMandatory ? `<button class="btn btn-sm btn-secondary" onclick="editDeadline(${t.id})">Deadline</button>` : ''}
+        <button class="btn btn-sm ${t.is_active?'btn-secondary':'btn-primary'}"
+                onclick="toggleTask(${t.id},${!t.is_active})">
+          ${t.is_active?'Disable':'Enable'}
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})">Delete</button>
+      </div>
+    </div>
+    <div class="deadline-edit" id="dedit-${t.id}" style="display:none">
+      <div class="deadline-edit-inner">
+        <label>Deadline hour (0–23)</label>
+        <input type="number" id="dh-${t.id}" value="${t.deadline_hour||20}" min="0" max="23" style="width:70px">
+        ${t.frequency==='weekly' ? `
+        <label style="margin-left:12px">Day</label>
+        <select id="dwd-${t.id}">
+          ${DAYS.map((d,i)=>`<option value="${i}" ${i===(t.deadline_weekday??4)?'selected':''}>${d}</option>`).join('')}
+        </select>` : ''}
+        <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="saveDeadline(${t.id},'${t.frequency}')">Save</button>
+        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('dedit-${t.id}').style.display='none'">✕</button>
+      </div>
+    </div>`;
+}
+
 async function refreshTaskList() {
   const res   = await fetch('/api/tasks');
   const tasks = await res.json();
-  const el    = document.getElementById('tasks-list');
 
-  el.innerHTML = tasks.map(t => {
-    const isMandatory = t.type === 'mandatory';
-    const deadlineInfo = isMandatory
-      ? (t.frequency === 'weekly'
-          ? `Deadline: ${DAYS[t.deadline_weekday||4]} at ${t.deadline_hour||20}:00`
-          : `Deadline: daily by ${t.deadline_hour||20}:00`)
-      : '';
+  const mandatory = tasks.filter(t => t.type === 'mandatory');
+  const optional  = tasks.filter(t => t.type === 'optional');
 
-    return `
-      <div class="settings-task" id="stask-${t.id}">
-        <div class="st-info">
-          <div class="st-name">${t.name}</div>
-          <div class="st-meta">${t.type} · ${t.frequency} · ${t.reward_dkk} DKK
-            ${deadlineInfo ? ` · <span class="deadline-chip">${deadlineInfo}</span>` : ''}
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          ${isMandatory ? `<button class="btn btn-sm btn-secondary" onclick="editDeadline(${t.id})">Deadline</button>` : ''}
-          <button class="btn btn-sm ${t.is_active?'btn-secondary':'btn-primary'}"
-                  onclick="toggleTask(${t.id},${!t.is_active})">
-            ${t.is_active?'Disable':'Enable'}
-          </button>
-        </div>
-      </div>
-      <div class="deadline-edit" id="dedit-${t.id}" style="display:none">
-        <div class="deadline-edit-inner">
-          <label>Deadline hour (0–23)</label>
-          <input type="number" id="dh-${t.id}" value="${t.deadline_hour||20}" min="0" max="23" style="width:70px">
-          ${t.frequency==='weekly' ? `
-          <label style="margin-left:12px">Day</label>
-          <select id="dwd-${t.id}">
-            ${DAYS.map((d,i)=>`<option value="${i}" ${i===(t.deadline_weekday??4)?'selected':''}>${d}</option>`).join('')}
-          </select>` : ''}
-          <button class="btn btn-sm btn-primary" style="margin-left:8px" onclick="saveDeadline(${t.id},'${t.frequency}')">Save</button>
-          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('dedit-${t.id}').style.display='none'">✕</button>
-        </div>
-      </div>`;
-  }).join('');
+  document.getElementById('tasks-list-mandatory').innerHTML =
+    mandatory.length ? mandatory.map(renderTaskRow).join('') : '<div class="st-empty">No mandatory tasks</div>';
+  document.getElementById('tasks-list-optional').innerHTML =
+    optional.length  ? optional.map(renderTaskRow).join('')  : '<div class="st-empty">No optional tasks</div>';
 }
 
 function editDeadline(id) {
@@ -555,6 +580,19 @@ async function toggleTask(id, active) {
   });
   refreshTaskList();
   loadDashboard();
+}
+
+async function deleteTask(id) {
+  if (!confirm('Delete this task permanently?')) return;
+  const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE', headers: authHeaders() });
+  if (res.ok) {
+    toast('Task deleted', 'success');
+    refreshTaskList();
+    loadDashboard();
+  } else {
+    const d = await res.json();
+    toast(d.detail || 'Error', 'error');
+  }
 }
 
 async function addTask() {

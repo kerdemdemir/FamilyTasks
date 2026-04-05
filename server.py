@@ -551,6 +551,20 @@ def update_task(task_id: int, body: TaskUpdate):
         conn.close()
 
 
+@app.delete("/api/tasks/{task_id}", dependencies=[Depends(require_parent)])
+def delete_task(task_id: int):
+    conn = get_db()
+    try:
+        if not conn.execute("SELECT 1 FROM tasks WHERE id=?", (task_id,)).fetchone():
+            raise HTTPException(404, "Task not found")
+        conn.execute("DELETE FROM completions WHERE task_id=?", (task_id,))
+        conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @app.post("/api/complete/{task_id}", dependencies=[Depends(require_parent)])
 def complete_task(task_id: int):
     conn = get_db()
